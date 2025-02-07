@@ -1,37 +1,17 @@
 <script setup lang="ts">
-import { defineComponent, onMounted, ref, toRaw } from "vue";
-import MessageBubble from "./components/MessageBubble.vue";
-import { TextLineStream } from "./types/textlinestream";
+import { defineComponent, onMounted, ref, toRaw, watch } from "vue";
 import daisyuiThemes from "daisyui/src/theming/themes";
 import type { Theme } from "daisyui";
-import OpenAI from "openai";
+import ChatWindow from "./components/ChatWindow.vue";
 
 // types
 /** @typedef {{ id: number, role: -'user' | 'assistant', content: string, timings: any }} Message */
 /** @typedef {{ role: 'user' | 'assistant', content: string }} APIMessage */
 /** @typedef {{ id: string, lastModified: number, messages: Array<Message> }} Conversation */
 
-interface Message {
-  id: number;
-  role: string;
-  content: string | null;
-}
-
-const BASE_URL = "http://localhost:8080";
-// OpenAI API config
-const openai = new OpenAI({
-  baseURL: "https://api.deepseek.com",
-  apiKey: "sk-10e7ee563d2e4244b7f19b671f6e5bc7",
-  dangerouslyAllowBrowser: true,
-});
-
-/** @type {Array<Message>} */
-const messages = ref<any[]>([]);
-const inputMsg = ref("");
+let messages = ref<any[]>([]);
 const isGenerating = ref(false);
-/** @type {Array<Message> | null} */
-const pendingMsg = ref<any>(null); // the on-going message from assistant
-const isDev = import.meta.env.MODE === "development";
+
 const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: "",
@@ -42,7 +22,7 @@ const CONFIG_DEFAULT = {
   excludeThoughtOnReq: true,
   // make sure these default values are in sync with `common.h`
   samplers: "edkypmxt",
-  temperature: 0.8,
+  temperature: 0.6,
   dynatemp_range: 0.0,
   dynatemp_exponent: 1.0,
   top_k: 40,
@@ -173,11 +153,8 @@ const StorageUtils = {
   },
 };
 
-let stopGeneration = () => {};
-let conversations = StorageUtils.getAllConversations();
-let selectedTheme = StorageUtils.getTheme();
 const viewingConvId = StorageUtils.getNewConvId();
-const config = StorageUtils.getConfig(); // list of themes supported by daisyui
+let selectedTheme = StorageUtils.getTheme();
 const THEMES = ["light", "dark"];
 // make sure light & dark are always at the beginning
 // .concat(
@@ -201,235 +178,6 @@ function toggleTheme(theme: Theme) {
   StorageUtils.setTheme(selectedTheme);
 }
 
-function editUserMsgAndRegenerate(msg: any) {
-  if (isGenerating.value) return;
-  const currConvId = viewingConvId;
-  const newContent = msg.content;
-  StorageUtils.filterAndKeepMsgs(currConvId, (m: any) => m.id < msg.id);
-  StorageUtils.appendMsg(currConvId, {
-    id: Date.now(),
-    role: "user",
-    content: newContent,
-  });
-  fetchConversation();
-  fetchMessages();
-  generateMessage(currConvId);
-}
-
-function regenerateMsg(msg: any) {
-  if (isGenerating.value) return;
-  // TODO: somehow keep old history (like how ChatGPT has different "tree"). This can be done by adding "sub-conversations" with "subconv-" prefix, and new message will have a list of subconvIds
-  const currConvId = viewingConvId;
-  StorageUtils.filterAndKeepMsgs(currConvId, (m: any) => m.id < msg.id);
-  fetchConversation();
-  fetchMessages();
-  generateMessage(currConvId);
-}
-
-function fetchConversation() {
-  conversations = StorageUtils.getAllConversations();
-}
-function fetchMessages() {
-  messages.value =
-    StorageUtils.getOneConversation(viewingConvId)?.messages ?? [];
-}
-
-async function sendMessage() {
-  if (!inputMsg.value || isGenerating.value) return;
-  const currConvId = viewingConvId;
-
-  StorageUtils.appendMsg(currConvId, {
-    id: Date.now(),
-    role: "user",
-    content: inputMsg.value,
-  });
-  fetchConversation();
-  fetchMessages();
-  inputMsg.value = "";
-  generateMessage(currConvId);
-}
-
-/**
- * filter out redundant fields upon sending to API
- * @param {Array<APIMessage>} messages
- * @returns {Array<APIMessage>}
- */
-function normalizeMsgsForAPI(messages: any) {
-  return messages.map((msg: any) => {
-    return {
-      role: msg.role,
-      content: msg.content,
-    };
-  });
-}
-
-/**
- * recommended for DeepsSeek-R1, filter out content between <think> and </think> tags
- * @param {Array<APIMessage>} messages
- * @returns {Array<APIMessage>}
- */
-function filterThoughtFromMsgs(messages: any) {
-  return messages.map((msg: any) => {
-    return {
-      role: msg.role,
-      content:
-        msg.role === "assistant"
-          ? msg.content.split("</think>").at(-1).trim()
-          : msg.content,
-    };
-  });
-}
-
-async function generateMessage(currConvId: any) {
-  if (isGenerating.value) return;
-  pendingMsg.value = {
-    id: Date.now() + 1,
-    role: "assistant",
-    content: null,
-  };
-  isGenerating.value = true;
-
-  try {
-    const config = StorageUtils.getConfig();
-    const abortController = new AbortController();
-    stopGeneration = () => abortController.abort();
-    /** @type {Array<APIMessage>} */
-    let tempMessages = [
-      { role: "system", content: config.systemMessage },
-      ...normalizeMsgsForAPI(messages.value),
-    ];
-    messages.value = tempMessages;
-    if (config.excludeThoughtOnReq) {
-      messages.value = filterThoughtFromMsgs(messages.value);
-    }
-    const params = {
-      messages: messages.value,
-      stream: true,
-      cache_prompt: true,
-      samplers: config.samplers,
-      temperature: config.temperature,
-      dynatemp_range: config.dynatemp_range,
-      dynatemp_exponent: config.dynatemp_exponent,
-      top_k: config.top_k,
-      top_p: config.top_p,
-      min_p: config.min_p,
-      typical_p: config.typical_p,
-      xtc_probability: config.xtc_probability,
-      xtc_threshold: config.xtc_threshold,
-      repeat_last_n: config.repeat_last_n,
-      repeat_penalty: config.repeat_penalty,
-      presence_penalty: config.presence_penalty,
-      frequency_penalty: config.frequency_penalty,
-      dry_multiplier: config.dry_multiplier,
-      dry_base: config.dry_base,
-      dry_allowed_length: config.dry_allowed_length,
-      dry_penalty_last_n: config.dry_penalty_last_n,
-      max_tokens: config.max_tokens,
-      timings_per_token: !!config.showTokensPerSecond,
-      ...(config.custom.length ? JSON.parse(config.custom) : {}),
-    };
-    const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
-      },
-      body: JSON.stringify(params),
-      signal: abortController.signal,
-    });
-    for await (const chunk of chunks) {
-      const stop = chunk.stop;
-      const lastContent: any = pendingMsg.value.content || "";
-      const addedContent = chunk.choices[0].delta.content;
-      if (addedContent) {
-        pendingMsg.value = {
-          id: pendingMsg.value.id,
-          role: "assistant",
-          content: lastContent + addedContent,
-        };
-      }
-      const timings = chunk.timings;
-      if (timings && config.showTokensPerSecond) {
-        // only extract what's really needed, to save some space
-        pendingMsg.value.timings = {
-          prompt_n: timings.prompt_n,
-          prompt_ms: timings.prompt_ms,
-          predicted_n: timings.predicted_n,
-          predicted_ms: timings.predicted_ms,
-        };
-      }
-    }
-
-    // const chunks = await openai.chat.completions.create({
-    //   messages: messages.value,
-    //   model: "deepseek-chat",
-    //   stream: true, // 开启流式传输
-    // });
-    // for await (const chunk of chunks) {
-    //   const addedContent = chunk.choices[0]?.delta?.content || ""; // 兼容空内容
-    //   const lastContent = pendingMsg.value.content || "";
-
-    //   if (addedContent) {
-    //     pendingMsg.value = {
-    //       id: pendingMsg.value.id,
-    //       role: "assistant",
-    //       content: lastContent + addedContent, // 累加新内容
-    //     };
-    //   }
-    // }
-
-    StorageUtils.appendMsg(currConvId, pendingMsg.value);
-    fetchConversation();
-    fetchMessages();
-    // setTimeout(() => document.getElementById("msg-input").focus(), 1);
-  } catch (error: any) {
-    if (error.name === "AbortError") {
-      StorageUtils.appendMsg(currConvId, pendingMsg.value);
-      fetchConversation();
-      fetchMessages();
-    } else {
-      console.error(error);
-      alert(error);
-      const lastUserMsg = StorageUtils.popMsg(currConvId);
-      inputMsg.value = lastUserMsg ? lastUserMsg.content : "";
-    }
-  }
-
-  isGenerating.value = false;
-  pendingMsg.value = null;
-  stopGeneration = () => {};
-  fetchMessages();
-}
-
-// wrapper for SSE
-async function* sendSSEPostRequest(url: any, fetchOptions: any) {
-  const res = await fetch(url, fetchOptions);
-  if (!res.body) {
-    throw new Error("Response body is null. Unable to read SSE stream.");
-  }
-
-  const reader = res.body
-    .pipeThrough(new TextDecoderStream())
-    .pipeThrough(new TextLineStream())
-    .getReader(); // Get a reader instead of using asyncIterator
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-
-    const line = value as string; // Explicitly cast `value` to `string`
-
-    if (isDev) console.log({ line });
-
-    if (line.startsWith("data:") && !line.endsWith("[DONE]")) {
-      yield JSON.parse(line.slice(5));
-    } else if (line.startsWith("error:")) {
-      const data = JSON.parse(line.slice(6));
-      throw new Error(data.message || "Unknown error");
-    }
-  }
-}
-
 function setDefaultTheme() {
   if (selectedTheme != "null") {
     document.body.setAttribute("data-theme", selectedTheme);
@@ -442,10 +190,18 @@ function setDefaultTheme() {
 onMounted(() => {
   setDefaultTheme();
 });
+
+watch(
+  () => isGenerating.value,
+  async (val) => {
+    console.log(val);
+  }
+);
 </script>
 
 <template>
   <div>
+    <div class="flex flex-row drawer lg:drawer-open"></div>
     <!-- main view -->
     <div
       class="chat-screen drawer-content grow flex flex-col h-screen w-screen mx-auto px-4"
@@ -489,67 +245,15 @@ onMounted(() => {
           </label>
         </div>
       </div>
-      <!-- chat messages -->
       <div id="messages-list" class="flex flex-col grow overflow-y-auto">
         <div class="mt-auto flex justify-center">
           <!-- placeholder to shift the message to the bottom -->
-          {{ messages.length === 0 ? "Send a message to start" : "" }}
+          {{ "" }}
         </div>
-        <div v-for="msg in messages" class="group">
-          <MessageBubble
-            :config="config"
-            :msg="msg"
-            :key="msg.id"
-            :is-generating="isGenerating"
-            :edit-user-msg-and-regenerate="editUserMsgAndRegenerate"
-            :regenerate-msg="regenerateMsg"
-          >
-          </MessageBubble>
-        </div>
-
-        <!-- pending (ongoing) assistant message -->
-        <div id="pending-msg" class="group">
-          <MessageBubble
-            v-if="pendingMsg"
-            :config="config"
-            :msg="pendingMsg"
-            :key="pendingMsg.id"
-            :is-generating="isGenerating"
-            :show-thought-in-progress="config.showThoughtInProgress"
-            :edit-user-msg-and-regenerate="() => {}"
-            :regenerate-msg="() => {}"
-          ></MessageBubble>
-        </div>
-      </div>
-
-      <!-- chat input -->
-      <div
-        class="flex flex-row items-center mt-8 mb-6"
-        style="min-width: 300px"
-      >
-        <textarea
-          class="textarea textarea-bordered w-full"
-          placeholder="Type a message (Shift+Enter to add a new line)"
-          v-model="inputMsg"
-          @keydown.enter.exact.prevent="sendMessage"
-          id="msg-input"
-          dir="auto"
-        ></textarea>
-        <button
-          v-if="!isGenerating"
-          class="btn btn-lg btn-outline btn-primary ml-4"
-          @click="sendMessage"
-          :disabled="inputMsg.length === 0"
-        >
-          Send
-        </button>
-        <button
-          v-else
-          class="btn btn-lg btn-outline btn-neutral ml-4"
-          @click="stopGeneration"
-        >
-          Stop
-        </button>
+        <ChatWindow
+          v-model:messages="messages"
+          v-model:isGenerating="isGenerating"
+        ></ChatWindow>
       </div>
     </div>
   </div>
