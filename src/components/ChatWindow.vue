@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Prop } from "vue";
+import { ref, watch, type Prop } from "vue";
 import OpenAI from "openai";
 import { TextLineStream } from "../types/textlinestream";
 import MessageBubble from "../components/MessageBubble.vue";
@@ -72,16 +72,19 @@ import MessageBubble from "../components/MessageBubble.vue";
 interface Props {
   messages: Array<any>;
   isGenerating?: boolean;
+  viewingConvId?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   messages: () => [] as any[],
   isGenerating: false,
+  viewingConvId: "",
 });
 
 const emit = defineEmits<{
   (event: "update:messages", newMessages: any[]): void;
   (event: "update:isGenerating", value: boolean): void;
+  (event: "update:viewingConvId", value: string): void;
 }>();
 
 const messages = ref<any[]>([]);
@@ -244,7 +247,7 @@ const StorageUtils = {
 
 let stopGeneration = () => {};
 let conversations = StorageUtils.getAllConversations();
-const viewingConvId = StorageUtils.getNewConvId();
+let viewingConvId = StorageUtils.getNewConvId();
 const config = StorageUtils.getConfig(); // list of themes supported by daisyui
 
 async function generateMessage(currConvId: any) {
@@ -434,6 +437,8 @@ function fetchConversation() {
 function fetchMessages() {
   messages.value =
     StorageUtils.getOneConversation(viewingConvId)?.messages ?? [];
+  emit("update:messages", messages.value);
+  // console.log(messages.value);
 }
 
 async function sendMessage() {
@@ -481,4 +486,15 @@ function filterThoughtFromMsgs(messages: any) {
     };
   });
 }
+
+watch(
+  () => props.viewingConvId,
+  (newVal, oldVal) => {
+    console.log(newVal);
+    if (newVal != oldVal) {
+      viewingConvId = newVal;
+      fetchMessages();
+    }
+  }
+);
 </script>

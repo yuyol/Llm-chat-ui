@@ -153,7 +153,7 @@ const StorageUtils = {
   },
 };
 
-const viewingConvId = StorageUtils.getNewConvId();
+const viewingConvId = ref(StorageUtils.getNewConvId());
 let selectedTheme = StorageUtils.getTheme();
 const THEMES = ["light", "dark"];
 // make sure light & dark are always at the beginning
@@ -187,6 +187,30 @@ function setDefaultTheme() {
   }
 }
 
+/**
+ * SIDE BAR
+ *
+ */
+
+let conversations = StorageUtils.getAllConversations();
+
+function newConversation() {
+  if (isGenerating.value) return;
+  viewingConvId.value = StorageUtils.getNewConvId();
+  console.log("App:" + viewingConvId.value);
+}
+
+function setViewingConv(convId: any) {
+  if (isGenerating.value) return;
+  viewingConvId.value = convId;
+  // console.log(viewingConvId);
+}
+
+function showMessage(conv: any) {
+  if (conv.messages[0] === null) return "null";
+  return conv.messages[0].content;
+}
+
 onMounted(() => {
   setDefaultTheme();
 });
@@ -201,59 +225,136 @@ watch(
 
 <template>
   <div>
-    <div class="flex flex-row drawer lg:drawer-open"></div>
-    <!-- main view -->
-    <div
-      class="chat-screen drawer-content grow flex flex-col h-screen w-screen mx-auto px-4"
-    >
-      <!-- header -->
-      <div class="flex flex-row items-center mt-6 mb-6">
-        <div class="grow text-2xl font-bold ml-2">YY Chat bot</div>
-        <!-- action buttons (top right) -->
-        <div class="flex items-center">
-          <!-- theme controller is copied from https://daisyui.com/components/theme-controller/ -->
-          <label class="swap swap-rotate">
-            <!-- this hidden checkbox controls the state -->
-            <input
-              type="checkbox"
-              class="theme-controller"
-              :checked="selectedTheme === 'dark'"
-              @change="toggleTheme"
-            />
+    <div class="flex flex-row drawer lg:drawer-open">
+      <input
+        id="toggle-drawer"
+        type="checkbox"
+        class="drawer-toggle"
+        :checked="false"
+      />
+      <!-- sidebar -->
+      <div class="drawer-side h-screen lg:h-screen z-50 lg:max-w-64">
+        <label
+          for="toggle-drawer"
+          aria-label="close sidebar"
+          class="drawer-overlay"
+        ></label>
+        <div class="flex flex-col bg-base-200 min-h-full max-w-64 py-4 px-4">
+          <div class="flex flex-row items-center justify-between mb-4 mt-4">
+            <h2 class="font-bold ml-4">Conversations</h2>
 
-            <!-- sun icon -->
+            <!-- close sidebar button -->
+            <label for="toggle-drawer" class="btn btn-ghost lg:hidden">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                fill="currentColor"
+                class="bi bi-arrow-bar-left"
+                viewBox="0 0 16 16"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M12.5 15a.5.5 0 0 1-.5-.5v-13a.5.5 0 0 1 1 0v13a.5.5 0 0 1-.5.5M10 8a.5.5 0 0 1-.5.5H3.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L3.707 7.5H9.5a.5.5 0 0 1 .5.5"
+                />
+              </svg>
+            </label>
+          </div>
+
+          <!-- list of conversations -->
+          <div
+            :class="{
+              'btn btn-ghost justify-start': true,
+              'btn-active': messages.length === 0,
+            }"
+            @click="newConversation"
+          >
+            + New conversation
+          </div>
+          <div
+            v-for="conv in conversations"
+            :class="{
+              'btn btn-ghost justify-start font-normal': true,
+              'btn-active': conv.id === viewingConvId,
+            }"
+            @click="setViewingConv(conv.id)"
+            dir="auto"
+          >
+            <span class="truncate">{{ showMessage(conv) }}</span>
+          </div>
+        </div>
+      </div>
+      <!-- main view -->
+      <div
+        class="chat-screen drawer-content grow flex flex-col h-screen w-screen mx-auto px-4"
+      >
+        <!-- header -->
+        <div class="flex flex-row items-center mt-6 mb-6">
+          <!-- open sidebar button -->
+          <label for="toggle-drawer" class="btn btn-ghost lg:hidden">
             <svg
-              class="swap-off h-10 w-10 fill-current"
               xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="currentColor"
+              class="bi bi-list"
+              viewBox="0 0 16 16"
             >
               <path
-                d="M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"
-              />
-            </svg>
-
-            <!-- moon icon -->
-            <svg
-              class="swap-on h-10 w-10 fill-current"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z"
+                fill-rule="evenodd"
+                d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"
               />
             </svg>
           </label>
+
+          <div class="grow text-2xl font-bold ml-2">YY Chat bot</div>
+          <!-- action buttons (top right) -->
+          <div class="flex items-center">
+            <!-- theme controller is copied from https://daisyui.com/components/theme-controller/ -->
+            <label class="swap swap-rotate">
+              <!-- this hidden checkbox controls the state -->
+              <input
+                type="checkbox"
+                class="theme-controller"
+                :checked="selectedTheme === 'dark'"
+                @change="toggleTheme"
+              />
+
+              <!-- sun icon -->
+              <svg
+                class="swap-off h-10 w-10 fill-current"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"
+                />
+              </svg>
+
+              <!-- moon icon -->
+              <svg
+                class="swap-on h-10 w-10 fill-current"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z"
+                />
+              </svg>
+            </label>
+          </div>
         </div>
-      </div>
-      <div id="messages-list" class="flex flex-col grow overflow-y-auto">
-        <div class="mt-auto flex justify-center">
-          <!-- placeholder to shift the message to the bottom -->
-          {{ "" }}
+        <div id="messages-list" class="flex flex-col grow overflow-y-auto">
+          <div class="mt-auto flex justify-center">
+            <!-- placeholder to shift the message to the bottom -->
+            {{ messages.length === 0 ? "Please input something" : "" }}
+          </div>
+          <ChatWindow
+            v-model:messages="messages"
+            v-model:isGenerating="isGenerating"
+            v-model:viewingConvId="viewingConvId"
+          ></ChatWindow>
         </div>
-        <ChatWindow
-          v-model:messages="messages"
-          v-model:isGenerating="isGenerating"
-        ></ChatWindow>
       </div>
     </div>
   </div>
