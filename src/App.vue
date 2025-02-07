@@ -164,6 +164,7 @@ const StorageUtils = {
   },
 };
 
+let stopGeneration = () => {};
 let conversations = StorageUtils.getAllConversations();
 let selectedTheme = StorageUtils.getTheme();
 const viewingConvId = StorageUtils.getNewConvId();
@@ -187,7 +188,6 @@ function setSelectedTheme(theme: Theme) {
 
 function toggleTheme(theme: Theme) {
   selectedTheme = selectedTheme === "dark" ? "light" : "dark";
-  console.log(selectedTheme);
   document.body.setAttribute("data-theme", selectedTheme);
   StorageUtils.setTheme(selectedTheme);
 }
@@ -359,8 +359,17 @@ async function generateMessage(currConvId: any) {
     fetchConversation();
     fetchMessages();
     // setTimeout(() => document.getElementById("msg-input").focus(), 1);
-  } catch (error) {
-    console.log(error);
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      StorageUtils.appendMsg(currConvId, pendingMsg.value);
+      fetchConversation();
+      fetchMessages();
+    } else {
+      console.error(error);
+      alert(error);
+      const lastUserMsg = StorageUtils.popMsg(currConvId);
+      inputMsg.value = lastUserMsg ? lastUserMsg.content : "";
+    }
   }
 
   isGenerating.value = false;
@@ -398,14 +407,8 @@ async function* sendSSEPostRequest(url: any, fetchOptions: any) {
   }
 }
 
-let stopGeneration = () => {
-  console.log("stop");
-};
-
 function setDefaultTheme() {
   if (selectedTheme != "null") {
-    console.log(selectedTheme);
-
     document.body.setAttribute("data-theme", selectedTheme);
   } else {
     selectedTheme = "light";
@@ -497,7 +500,10 @@ onMounted(() => {
       </div>
 
       <!-- chat input -->
-      <div class="flex flex-row items-center mt-8 mb-6">
+      <div
+        class="flex flex-row items-center mt-8 mb-6"
+        style="min-width: 300px"
+      >
         <textarea
           class="textarea textarea-bordered w-full"
           placeholder="Type a message (Shift+Enter to add a new line)"
@@ -508,13 +514,17 @@ onMounted(() => {
         ></textarea>
         <button
           v-if="!isGenerating"
-          class="btn btn-primary ml-2"
+          class="btn btn-lg btn-outline btn-primary ml-4"
           @click="sendMessage"
           :disabled="inputMsg.length === 0"
         >
           Send
         </button>
-        <button v-else class="btn btn-neutral ml-2" @click="stopGeneration">
+        <button
+          v-else
+          class="btn btn-lg btn-outline btn-neutral ml-4"
+          @click="stopGeneration"
+        >
           Stop
         </button>
       </div>
