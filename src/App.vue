@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { defineComponent, ref, toRaw } from "vue";
+import { defineComponent, onMounted, ref, toRaw } from "vue";
 import MessageBubble from "./components/MessageBubble.vue";
 import { TextLineStream } from "./types/textlinestream";
 import { asyncIterator } from "@sec-ant/readable-stream/ponyfill/asyncIterator";
+import daisyuiThemes from "daisyui/src/theming/themes";
+import type { Theme } from "daisyui";
 
 // types
 /** @typedef {{ id: number, role: -'user' | 'assistant', content: string, timings: any }} Message */
@@ -151,7 +153,7 @@ const StorageUtils = {
     localStorage.setItem("config", JSON.stringify(config));
   },
   getTheme() {
-    return localStorage.getItem("theme") || "auto";
+    return localStorage.getItem("theme") || "null";
   },
   setTheme(theme: any) {
     if (theme === "auto") {
@@ -163,8 +165,32 @@ const StorageUtils = {
 };
 
 let conversations = StorageUtils.getAllConversations();
+let selectedTheme = StorageUtils.getTheme();
 const viewingConvId = StorageUtils.getNewConvId();
-const config = StorageUtils.getConfig();
+const config = StorageUtils.getConfig(); // list of themes supported by daisyui
+const THEMES = ["light", "dark"];
+// make sure light & dark are always at the beginning
+// .concat(
+//   Object.keys(daisyuiThemes).filter((t) => t !== "light" && t !== "auto")
+// );
+const themes = ref(THEMES);
+
+function setSelectedTheme(theme: Theme) {
+  selectedTheme = theme;
+  document.body.setAttribute("data-theme", theme);
+  document.body.setAttribute(
+    "data-color-scheme",
+    daisyuiThemes[theme]?.["color-scheme"] ?? "auto"
+  );
+  StorageUtils.setTheme(theme);
+}
+
+function toggleTheme(theme: Theme) {
+  selectedTheme = selectedTheme === "dark" ? "light" : "dark";
+  console.log(selectedTheme);
+  document.body.setAttribute("data-theme", selectedTheme);
+  StorageUtils.setTheme(selectedTheme);
+}
 
 function editUserMsgAndRegenerate(msg: any) {
   if (isGenerating.value) return;
@@ -375,6 +401,21 @@ async function* sendSSEPostRequest(url: any, fetchOptions: any) {
 let stopGeneration = () => {
   console.log("stop");
 };
+
+function setDefaultTheme() {
+  if (selectedTheme != "null") {
+    console.log(selectedTheme);
+
+    document.body.setAttribute("data-theme", selectedTheme);
+  } else {
+    selectedTheme = "light";
+    document.body.setAttribute("data-theme", selectedTheme);
+  }
+}
+
+onMounted(() => {
+  setDefaultTheme();
+});
 </script>
 
 <template>
@@ -383,6 +424,45 @@ let stopGeneration = () => {
     <div
       class="chat-screen drawer-content grow flex flex-col h-screen w-screen mx-auto px-4"
     >
+      <!-- header -->
+      <div class="flex flex-row items-center mt-6 mb-6">
+        <div class="grow text-2xl font-bold ml-2">YY Chat bot</div>
+        <!-- action buttons (top right) -->
+        <div class="flex items-center">
+          <!-- theme controller is copied from https://daisyui.com/components/theme-controller/ -->
+          <label class="swap swap-rotate">
+            <!-- this hidden checkbox controls the state -->
+            <input
+              type="checkbox"
+              class="theme-controller"
+              :checked="selectedTheme === 'dark'"
+              @change="toggleTheme"
+            />
+
+            <!-- sun icon -->
+            <svg
+              class="swap-off h-10 w-10 fill-current"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"
+              />
+            </svg>
+
+            <!-- moon icon -->
+            <svg
+              class="swap-on h-10 w-10 fill-current"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z"
+              />
+            </svg>
+          </label>
+        </div>
+      </div>
       <!-- chat messages -->
       <div id="messages-list" class="flex flex-col grow overflow-y-auto">
         <div class="mt-auto flex justify-center">

@@ -1,4 +1,4 @@
-@import "./base.css";
+/* @import "./base.css"; */
 @use "sass:meta";
 @tailwind base;
 @tailwind components;
