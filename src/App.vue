@@ -2,9 +2,9 @@
 import { defineComponent, onMounted, ref, toRaw } from "vue";
 import MessageBubble from "./components/MessageBubble.vue";
 import { TextLineStream } from "./types/textlinestream";
-import { asyncIterator } from "@sec-ant/readable-stream/ponyfill/asyncIterator";
 import daisyuiThemes from "daisyui/src/theming/themes";
 import type { Theme } from "daisyui";
+import OpenAI from "openai";
 
 // types
 /** @typedef {{ id: number, role: -'user' | 'assistant', content: string, timings: any }} Message */
@@ -18,6 +18,13 @@ interface Message {
 }
 
 const BASE_URL = "http://localhost:8080";
+// OpenAI API config
+const openai = new OpenAI({
+  baseURL: "https://api.deepseek.com",
+  apiKey: "sk-10e7ee563d2e4244b7f19b671f6e5bc7",
+  dangerouslyAllowBrowser: true,
+});
+
 /** @type {Array<Message>} */
 const messages = ref<any[]>([]);
 const inputMsg = ref("");
@@ -28,7 +35,8 @@ const isDev = import.meta.env.MODE === "development";
 const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: "",
-  systemMessage: "You are a helpful assistant.",
+  systemMessage:
+    "You are a job seeker and senior Java software developer and logician. Your answers need to be detailed and accurate. As a job seeker, please think like you would answer the interviewer's questions during an interview. You can think in English, but the answer must be in Chinese.",
   showTokensPerSecond: false,
   showThoughtInProgress: false,
   excludeThoughtOnReq: true,
@@ -351,6 +359,25 @@ async function generateMessage(currConvId: any) {
         };
       }
     }
+
+    // const chunks = await openai.chat.completions.create({
+    //   messages: messages.value,
+    //   model: "deepseek-chat",
+    //   stream: true, // 开启流式传输
+    // });
+    // for await (const chunk of chunks) {
+    //   const addedContent = chunk.choices[0]?.delta?.content || ""; // 兼容空内容
+    //   const lastContent = pendingMsg.value.content || "";
+
+    //   if (addedContent) {
+    //     pendingMsg.value = {
+    //       id: pendingMsg.value.id,
+    //       role: "assistant",
+    //       content: lastContent + addedContent, // 累加新内容
+    //     };
+    //   }
+    // }
+
     StorageUtils.appendMsg(currConvId, pendingMsg.value);
     fetchConversation();
     fetchMessages();

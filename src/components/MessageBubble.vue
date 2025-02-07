@@ -42,7 +42,7 @@
             <details
               v-if="msg.role === 'assistant' && splitMsgContent.cot"
               class="collapse bg-base-200 collapse-arrow mb-4"
-              :open="splitMsgContent.isThinking && showThoughtInProgress"
+              open
             >
               <summary class="collapse-title">
                 <span v-if="splitMsgContent.isThinking">
