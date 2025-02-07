@@ -36,7 +36,7 @@ const CONFIG_DEFAULT = {
   // Note: in order not to introduce breaking changes, please keep the same data type (number, string, etc) if you want to change the default value. Do not use null or undefined for default value.
   apiKey: "",
   systemMessage:
-    "You are a job seeker and senior Java software developer and logician. Your answers need to be detailed and accurate. As a job seeker, please think like you would answer the interviewer's questions during an interview. You can think in English, but the answer must be in Chinese.",
+    "You are a job seeker and senior Java software developer and logician, now you are interviewing for a SWE job. Your answers need to be detailed and accurate. As a job seeker, please think like you would answer the interviewer's questions during an interview. You can think in English, but the answer must be in Chinese.",
   showTokensPerSecond: false,
   showThoughtInProgress: false,
   excludeThoughtOnReq: true,
