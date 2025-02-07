@@ -17,6 +17,7 @@ interface Message {
   content: string | null;
 }
 
+const BASE_URL = "http://localhost:8080";
 /** @type {Array<Message>} */
 const messages = ref<any[]>([]);
 const inputMsg = ref("");
@@ -319,24 +320,19 @@ async function generateMessage(currConvId: any) {
       timings_per_token: !!config.showTokensPerSecond,
       ...(config.custom.length ? JSON.parse(config.custom) : {}),
     };
-    const chunks = sendSSEPostRequest(
-      `http://localhost:8080/v1/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(config.apiKey
-            ? { Authorization: `Bearer ${config.apiKey}` }
-            : {}),
-        },
-        body: JSON.stringify(params),
-        signal: abortController.signal,
-      }
-    );
+    const chunks = sendSSEPostRequest(`${BASE_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
+      },
+      body: JSON.stringify(params),
+      signal: abortController.signal,
+    });
     for await (const chunk of chunks) {
       const stop = chunk.stop;
-      const addedContent = chunk.choices[0].delta.content;
       const lastContent: any = pendingMsg.value.content || "";
+      const addedContent = chunk.choices[0].delta.content;
       if (addedContent) {
         pendingMsg.value = {
           id: pendingMsg.value.id,
